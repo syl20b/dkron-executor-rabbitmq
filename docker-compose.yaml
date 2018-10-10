@@ -1,0 +1,59 @@
+version: "3.4"
+services:
+  integration-tests:
+    build:
+      context: .
+      target: builder
+    entrypoint: 'go test'
+    depends_on:
+      - dkron
+      - rabbit
+      - redis
+    environment:
+      - RABBIT_URL=amqp://rabbit:5672
+      - DKRON_URL=http://dkron:8080
+
+  dkron:
+    build: .
+    depends_on:
+      - redis
+      - rabbit
+    ports:
+      - 8080:8080
+      - 8946:8946
+    environment:
+      - DKRON_BACKEND=redis
+      - DKRON_BACKEND_MACHINE=redis:6379
+      - DKRON_EXECUTOR_RABBITMQ_RABBIT_URL=rabbit:5672
+      - GIN_MODE=release
+    command: agent --server
+
+  redis:
+    image: redis
+    ports:
+      - 6379
+    logging:
+      driver: none
+
+  rabbit:
+    image: rabbitmq:3.7-management-alpine
+    ports:
+      - 5672:5672
+      - 15672:15672
+    logging:
+      driver: none
+
+  start-dependencies:
+    image: dadarek/wait-for-dependencies
+    command: rabbit:15672 redis:6379
+    depends_on:
+      - redis
+      - rabbit
+
+  start-services:
+    image: dadarek/wait-for-dependencies
+    command: dkron:8080
+    depends_on:
+      - redis
+      - rabbit
+      - dkron
